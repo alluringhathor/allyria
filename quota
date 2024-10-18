@@ -1,0 +1,116 @@
+require('dotenv').config();
+const { Client, GatewayIntentBits } = require('discord.js');
+const fs = require('fs');
+const express = require('express');
+
+const client = new Client({
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent,
+    ]
+});
+
+
+const app = express();
+
+app.get('/', (req, res) => {
+    res.send('Bot is running!');
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Server is listening on port ${PORT}`);
+});
+
+//  quota shii
+let quotas = {};
+const adminRoleID = '1256653721912479786'; 
+
+client.once('ready', () => {
+    console.log('Bot is online!');
+    loadQuotas();
+    scheduleMonthlyReset();
+});
+
+client.on('messageCreate', message => {
+    console.log('Message detected: ', message.content);
+    if (message.content.toLowerCase().includes('vouch') && message.mentions.users.size > 0) {
+        console.log('Vouch command detected');
+        handleVouch(message);
+    } else if (message.content === '!myquota') {
+        console.log('My Quota command detected');
+        displayMyQuota(message);
+    } else if (message.content === '!allquotas' && message.member.roles.cache.some(role => role.id === adminRoleID)) {
+        console.log('All Quotas command detected');
+        displayAllQuotas(message);
+    }
+});
+
+client.login(process.env.DISCORD_TOKEN);
+
+function handleVouch(message) {
+    const mentionedUsers = message.mentions.users;
+    mentionedUsers.forEach(user => {
+        const pilotId = user.id;
+        if (!quotas[pilotId]) {
+            quotas[pilotId] = { currentMonth: 0, previousMonths: [] };
+        }
+        quotas[pilotId].currentMonth += 1;
+    });
+}
+
+function displayMyQuota(message) {
+    const pilotId = message.author.id;
+    if (!quotas[pilotId]) {
+        message.channel.send('You have no vouches recorded.');
+        return;
+    }
+    const quota = quotas[pilotId].currentMonth;
+    message.channel.send(`Your current quota: ${quota}`);
+}
+
+function displayAllQuotas(message) {
+    let response = 'Current Quotas:\n';
+    for (const pilotId in quotas) {
+        response += `<@${pilotId}>: ${quotas[pilotId].currentMonth}\n`;
+    }
+    message.channel.send(response);
+}
+
+function saveMonthlyQuota() {
+    const date = new Date();
+    const month = date.getMonth() + 1;
+    const year = date.getFullYear();
+    for (const pilotId in quotas) {
+        quotas[pilotId].previousMonths.push({ month, year, quota: quotas[pilotId].currentMonth });
+        quotas[pilotId].currentMonth = 0;
+    }
+    try {
+        fs.writeFileSync('quotas.json', JSON.stringify(quotas, null, 2));
+        console.log('Monthly quotas saved.');
+    } catch (err) {
+        console.error('Error saving quotas:', err);
+    }
+}
+
+function scheduleMonthlyReset() {
+    const now = new Date();
+    const firstDayNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const timeUntilReset = firstDayNextMonth - now;
+    setTimeout(() => {
+        saveMonthlyQuota();
+        scheduleMonthlyReset();
+    }, timeUntilReset);
+}
+
+function loadQuotas() {
+    if (fs.existsSync('quotas.json')) {
+        try {
+            const data = fs.readFileSync('quotas.json');
+            quotas = JSON.parse(data);
+        } catch (err) {
+            console.error('Error loading quotas:', err);
+        }
+    }
+}
