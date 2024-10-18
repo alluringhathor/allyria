@@ -1,7 +1,10 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits } = require('discord.js');
+const { Client, GatewayIntentBits, ActivityType } = require('discord.js');
 const fs = require('fs');
-const express = require('express');
+const express = require('express'); 
+
+const app = express();
+const port = 3000;  
 
 const client = new Client({
     intents: [
@@ -11,24 +14,23 @@ const client = new Client({
     ]
 });
 
-
-const app = express();
-
 app.get('/', (req, res) => {
     res.send('Bot is running!');
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`Server is listening on port ${PORT}`);
+app.listen(port, () => {
+    console.log(`Server is listening on port ${port}`);
 });
-
 //  quota shii
 let quotas = {};
 const adminRoleID = '1256653721912479786'; 
 
 client.once('ready', () => {
-    console.log('Bot is online!');
+    console.log(`Logged in as ${client.user.tag}!`);
+    client.user.setPresence({
+        activities: [{ name: 'discord.gg/allyria', type: ActivityType.Watching }],
+        status: 'online',
+    });
     loadQuotas();
     scheduleMonthlyReset();
 });
@@ -63,15 +65,15 @@ function handleVouch(message) {
 function displayMyQuota(message) {
     const pilotId = message.author.id;
     if (!quotas[pilotId]) {
-        message.channel.send('You have no vouches recorded.');
+        message.channel.send('You haven’t completed any request, or no clients have vouched for you yet.');
         return;
     }
     const quota = quotas[pilotId].currentMonth;
-    message.channel.send(`Your current quota: ${quota}`);
+    message.channel.send(`Amount of vouches you’ve received this month: ${quota}`);
 }
 
 function displayAllQuotas(message) {
-    let response = 'Current Quotas:\n';
+    let response = 'Currently fulfilled quota:\n';
     for (const pilotId in quotas) {
         response += `<@${pilotId}>: ${quotas[pilotId].currentMonth}\n`;
     }
